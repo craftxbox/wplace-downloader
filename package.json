@@ -5,6 +5,7 @@
   "author": "craftxbox",
   "license": "AGPL-3.0-only",
   "description": "",
+  "type":"module",
   "dependencies": {
     "canvas": "^3.2.0",
     "merge-images": "^2.0.0"

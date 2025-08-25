@@ -1,0 +1,11 @@
+{
+    "jobs": [
+        {
+            "name": "wplace",
+            "xStart": 0,
+            "yStart": 0,
+            "xEnd": 10,
+            "yEnd": 10
+        }
+    ]
+}

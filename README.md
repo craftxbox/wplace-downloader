@@ -5,7 +5,20 @@ This is a very hastily thrown together script to capture segments of the wplace 
 This guide expects you already have NodeJS 20 or later installed.  
 Clone the repo and run `npm install`  
   
-Roughly speaking, Change the `xStart`/`xEnd` and `yStart`/`yEnd` variables at the top of the file for the area you wish to capture.  
+Create a `config.json` file in the root of the project, following the format in the example below:  
+```json
+{
+    "jobs": [
+        {
+            "name": "whatever you want",
+            "xStart": 0,
+            "yStart": 0,
+            "xEnd": 10,
+            "yEnd": 10
+        }
+    ]
+}
+```
 You can find the tile/chunk coordinates you need using [Overlay Pro](https://greasyfork.org/en/scripts/545041-wplace-overlay-pro) or by manually screwing around in the console  
   
 Large captures will take a considerable amount of time,  
