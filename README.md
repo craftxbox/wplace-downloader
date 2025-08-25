@@ -26,3 +26,6 @@ if you get hit with 429 errors and the downloader aborts, try closing all the wp
   
 When you are ready to start, run `npx tsx .` and it should start the process.  
 When it is finished, the finalized file will be somewhere inside the `images` folder. You are looking for the file ending in `_merged`
+
+## Sample Output
+![](https://transfur.science/kl7dar6)
