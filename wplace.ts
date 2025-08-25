@@ -96,5 +96,6 @@ setImmediate(async function () {
         let buf = Buffer.from(data, "base64");
         fs.writeFileSync(`./${filePath}_merged.png`, buf);
         console.log("Merged image saved!");
+        fs.rmdirSync(`./${filePath}`, { recursive: true });
     });
 });
