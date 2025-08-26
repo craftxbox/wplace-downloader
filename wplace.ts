@@ -19,6 +19,7 @@ async function startJob(job: Job) {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
+        timeZone: "UTC",
     });
     let TimeFormatter = Intl.DateTimeFormat("en", {
         hour: "2-digit",
