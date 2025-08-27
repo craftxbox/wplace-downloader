@@ -126,7 +126,7 @@ async function startJob(job: Job) {
         threadLimit *= proxies.length;
     }
 
-    threadLimit = Math.min(threadLimit, xEnd - xStart + 1); // No need to have more threads than columns
+    threadLimit = Math.min(threadLimit, xEnd - xStart + 1); // No need to have more threads than rows
     //threadLimit = Math.min(threadLimit, 256); // try not to overwhelm the process with too many threads
 
     return new Promise(async function (resolve, reject) {
@@ -144,7 +144,7 @@ async function startJob(job: Job) {
             } // Wait if too many threads
 
             livingThreads++;
-            console.log(`Starting column ${x} (${livingThreads} threads alive)`);
+            console.log(`Starting row ${x} (${livingThreads} threads alive)`);
 
             let worker = new Worker(`import('tsx/esm/api').then(({ register }) => { register(); import('${workerFileName}') })`, {
                 eval: true,
@@ -161,7 +161,7 @@ async function startJob(job: Job) {
             worker.on("message", (msg) => {
                 if (msg.done) {
                     livingThreads--;
-                    console.log(`Finished column ${x} (${livingThreads} threads alive)`);
+                    console.log(`Finished row ${x} (${livingThreads} threads alive)`);
                 }
                 if (msg.proxy) {
                     let index = proxies.indexOf(msg.proxy);
