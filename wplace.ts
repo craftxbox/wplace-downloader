@@ -4,6 +4,7 @@ import got, { Options } from "got";
 import type { Response } from "got";
 import { Canvas, Image } from "canvas";
 import { HttpsProxyAgent } from "hpagent";
+import os from "os";
 
 type Proxy = {
     url: string;
@@ -111,6 +112,15 @@ async function startJob(job: Job) {
     let threadLimit = 3; // this sets the default thread limit per proxy
     let requestSpeed = 1000; // ms. Probably don't set this too low or you will get rate limited, experimentally i have found that threadlimit 3 with 1000ms is the lowest you can go
 
+    let startTime = process.hrtime.bigint();
+
+    let nomerge = false;
+
+    if ((xEnd - xStart) * (yEnd - yStart) * 6 > os.totalmem()) {
+        console.log("Warning: This job requires more memory than your system has available. Merging will not be attempted.");
+        nomerge = true;
+    }
+
     if (proxies.length > 0) {
         threadLimit *= proxies.length;
         threadLimit = Math.min(threadLimit, xEnd - xStart); // No need to have more threads than columns
@@ -166,7 +176,7 @@ async function startJob(job: Job) {
 
                     if (result.statusCode === 404) {
                         fs.copyFileSync(`./empty.png`, `./${filePath}/wplace_s0_${x}_${y}.png`);
-                        console.log(`Tile ${x}, ${y} is empty.`);
+                        if(proxies.length < 3) console.log(`Tile ${x}, ${y} is empty.`); // this gets really spammy with many proxies
                         await new Promise((resolve) => setTimeout(resolve, requestSpeed));
                         continue;
                     }
@@ -183,7 +193,7 @@ async function startJob(job: Job) {
 
                     let buffer = result.rawBody;
                     fs.writeFileSync(`./${filePath}/wplace_s0_${x}_${y}.png`, buffer);
-                    console.log(`Saved tile ${x}, ${y}`);
+                    if(proxies.length < 3) console.log(`Saved tile ${x}, ${y}`); // this gets really spammy with many proxies
                     await new Promise((resolve) => setTimeout(resolve, requestSpeed));
                 }
                 livingThreads--;
@@ -198,7 +208,13 @@ async function startJob(job: Job) {
         while (livingThreads > 0) {
             await new Promise((resolve) => setTimeout(resolve, threadSpawnSpeed));
         }
-        console.log("All done!");
+        console.log("All done! Finished in " + Number(process.hrtime.bigint() - startTime) / 1000000000 + "s");
+
+        if (nomerge) {
+            console.log("Skipping merge due to memory constraints.");
+            resolve(true);
+            return;
+        }
 
         mergeImages(
             [
