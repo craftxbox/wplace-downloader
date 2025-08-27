@@ -116,14 +116,14 @@ async function startJob(job: Job) {
 
     let nomerge = false;
 
-    if ((xEnd - xStart) * (yEnd - yStart) * 6 > os.totalmem()) {
+    if ((xEnd - xStart) * (yEnd - yStart) * 1000 * 6 > os.totalmem()) {
         console.log("Warning: This job requires more memory than your system has available. Merging will not be attempted.");
         nomerge = true;
     }
 
     if (proxies.length > 0) {
         threadLimit *= proxies.length;
-        threadLimit = Math.min(threadLimit, xEnd - xStart); // No need to have more threads than columns
+        threadLimit = Math.min(threadLimit, xEnd - xStart + 1); // No need to have more threads than columns
     }
 
     return new Promise(async function (resolve, reject) {
