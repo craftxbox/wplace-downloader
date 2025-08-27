@@ -107,6 +107,14 @@ async function startJob(job: Job) {
     let abort = false;
     let livingThreads = 0;
 
+    let threadLimit = 3; // this sets the default thread limit per proxy
+    let requestSpeed = 1000; // ms. Probably don't set this too low or you will get rate limited, experimentally i have found that threadlimit 3 with 1000ms is the lowest you can go
+
+    if (proxies.length > 0) {
+        threadLimit *= proxies.length;
+        threadLimit = Math.min(threadLimit, xEnd - xStart); // No need to have more threads than columns
+    }
+
     return new Promise(async function (resolve, reject) {
         console.log("poking the bear...");
         let result = await instance.get(`files/s0/tiles/0/0.png`);
@@ -117,9 +125,9 @@ async function startJob(job: Job) {
 
         for (let x = xStart; x <= xEnd; x++) {
             if (abort) break;
-            while (livingThreads >= 3) {
+            while (livingThreads >= threadLimit) {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
-            } // Wait if there are already 3 threads
+            } // Wait if too many threads
             setImmediate(async function () {
                 livingThreads++;
                 console.log(`Starting column ${x} (${livingThreads} threads alive)`);
@@ -158,7 +166,7 @@ async function startJob(job: Job) {
                     if (result.statusCode === 404) {
                         fs.copyFileSync(`./empty.png`, `./${filePath}/wplace_s0_${x}_${y}.png`);
                         console.log(`Tile ${x}, ${y} is empty.`);
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                        await new Promise((resolve) => setTimeout(resolve, requestSpeed));
                         continue;
                     }
                     if (result.statusCode !== 200) {
@@ -175,7 +183,7 @@ async function startJob(job: Job) {
                     let buffer = result.rawBody;
                     fs.writeFileSync(`./${filePath}/wplace_s0_${x}_${y}.png`, buffer);
                     console.log(`Saved tile ${x}, ${y}`);
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, requestSpeed));
                 }
                 livingThreads--;
                 if (proxy) {
