@@ -116,7 +116,7 @@ async function startJob(job: Job) {
 
     let nomerge = false;
 
-    if ((xEnd - xStart) * (yEnd - yStart) * 1000 * 6 > os.totalmem()) {
+    if (((xEnd - xStart) * 1000) * ((yEnd - yStart) * 1000) * 6 > os.totalmem()) {
         console.log("Warning: This job requires more memory than your system has available. Merging will not be attempted.");
         nomerge = true;
     }
