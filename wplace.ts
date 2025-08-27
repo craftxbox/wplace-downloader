@@ -1,12 +1,13 @@
 import fs from "fs";
 import mergeImages from "merge-images";
-import got, { Options } from "got";
-import type { Response } from "got";
+import got from "got";
 import { Canvas, Image } from "canvas";
 import { HttpsProxyAgent } from "hpagent";
 import os from "os";
+import { isMainThread, Worker } from "worker_threads";
+import { workerFileName } from "./worker";
 
-type Proxy = {
+export type Proxy = {
     url: string;
     username?: string;
     password?: string;
@@ -21,7 +22,7 @@ type Job = {
     yEnd: number;
 };
 
-const instance = got.extend({
+export const instance = got.extend({
     prefixUrl: "https://backend.wplace.live/",
     throwHttpErrors: false,
     retry: { limit: 0 },
@@ -52,11 +53,11 @@ const instance = got.extend({
 import config from "./config.json" assert { type: "json" };
 
 const jobs: Job[] = config.jobs;
-const proxies: Proxy[] = (config.proxyPool as Proxy[]) || [];
+export const proxies: Proxy[] = (config.proxyPool as Proxy[]) || [];
 
 let proxyUtilization: number[] = Array(proxies.length).fill(0);
 
-function getLeastUsedProxy(): Proxy | null {
+export function getLeastUsedProxy(): Proxy | null {
     if (proxies.length === 0) return null;
     let minUsage = Math.min(...proxyUtilization);
     let index = proxyUtilization.indexOf(minUsage);
@@ -64,7 +65,7 @@ function getLeastUsedProxy(): Proxy | null {
     return proxies[index];
 }
 
-function spawnHttpAgent(proxy: Proxy) {
+export function spawnHttpAgent(proxy: Proxy) {
     let authorization = proxy.username && proxy.password ? `Basic ${Buffer.from(`${proxy.username}:${proxy.password}`).toString("base64")}` : undefined;
     let headers = authorization ? { authorization } : undefined;
     let httpAgent = new HttpsProxyAgent({
@@ -116,15 +117,17 @@ async function startJob(job: Job) {
 
     let nomerge = false;
 
-    if (((xEnd - xStart) * 1000) * ((yEnd - yStart) * 1000) * 6 > os.totalmem()) {
+    if ((xEnd - xStart) * 1000 * ((yEnd - yStart) * 1000) * 4.5 > os.totalmem()) {
         console.log("Warning: This job requires more memory than your system has available. Merging will not be attempted.");
         nomerge = true;
     }
 
     if (proxies.length > 0) {
         threadLimit *= proxies.length;
-        threadLimit = Math.min(threadLimit, xEnd - xStart + 1); // No need to have more threads than columns
     }
+
+    threadLimit = Math.min(threadLimit, xEnd - xStart + 1); // No need to have more threads than columns
+    //threadLimit = Math.min(threadLimit, 256); // try not to overwhelm the process with too many threads
 
     return new Promise(async function (resolve, reject) {
         console.log("poking the bear...");
@@ -139,70 +142,33 @@ async function startJob(job: Job) {
             while (livingThreads >= threadLimit) {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
             } // Wait if too many threads
-            setImmediate(async function () {
-                livingThreads++;
-                console.log(`Starting column ${x} (${livingThreads} threads alive)`);
-                let proxy = getLeastUsedProxy();
 
-                let localOpts = {} as Options;
-                if (proxy) {
-                    switch (proxy.type) {
-                        case "http":
-                        case "https":
-                            let httpAgent = spawnHttpAgent(proxy);
-                            localOpts.agent = {
-                                http: httpAgent,
-                                https: httpAgent,
-                            };
-                            break;
-                        case "srcip":
-                            localOpts.localAddress = proxy.url;
-                            break;
-                    }
+            livingThreads++;
+            console.log(`Starting column ${x} (${livingThreads} threads alive)`);
+
+            let worker = new Worker(`import('tsx/esm/api').then(({ register }) => { register(); import('${workerFileName}') })`, {
+                eval: true,
+                workerData: {
+                    x,
+                    yStart,
+                    yEnd,
+                    filePath,
+                    requestSpeed,
+                    proxy: getLeastUsedProxy(),
+                },
+            });
+
+            worker.on("message", (msg) => {
+                if (msg.done) {
+                    livingThreads--;
+                    console.log(`Finished column ${x} (${livingThreads} threads alive)`);
                 }
-
-                for (let y = yStart; y <= yEnd; y++) {
-                    if (abort) return;
-                    let result: Response<string>;
-                    try {
-                        result = await (instance.get(`files/s0/tiles/${x}/${y}.png`, localOpts) as Promise<Response<string>>);
-                    } catch (e) {
-                        console.log(`Tile ${x}, ${y} failed to fetch (network error?), retrying in 10s...`);
-                        console.log(e.message);
-                        await new Promise((resolve) => setTimeout(resolve, 10000));
-                        y--;
-                        continue;
-                    }
-
-                    if (result.statusCode === 404) {
-                        fs.copyFileSync(`./empty.png`, `./${filePath}/wplace_s0_${x}_${y}.png`);
-                        if(proxies.length < 3) console.log(`Tile ${x}, ${y} is empty.`); // this gets really spammy with many proxies
-                        await new Promise((resolve) => setTimeout(resolve, requestSpeed));
-                        continue;
-                    }
-                    if (result.statusCode !== 200) {
-                        let retryAfter: string | number = result.headers["retry-after"] || "";
-                        if (retryAfter.length > 0) retryAfter = parseInt(retryAfter);
-                        else retryAfter = 10;
-
-                        console.log(`Tile ${x}, ${y} failed to fetch (${result.statusCode}), retrying in ${retryAfter}s...`);
-                        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1050));
-                        y--;
-                        continue;
-                    }
-
-                    let buffer = result.rawBody;
-                    fs.writeFileSync(`./${filePath}/wplace_s0_${x}_${y}.png`, buffer);
-                    if(proxies.length < 3) console.log(`Saved tile ${x}, ${y}`); // this gets really spammy with many proxies
-                    await new Promise((resolve) => setTimeout(resolve, requestSpeed));
-                }
-                livingThreads--;
-                if (proxy) {
-                    let index = proxies.indexOf(proxy);
+                if (msg.proxy) {
+                    let index = proxies.indexOf(msg.proxy);
                     if (index !== -1) proxyUtilization[index]--;
                 }
-                console.log(`Finished column ${x} (${livingThreads} threads alive)`);
             });
+
             await new Promise((resolve) => setTimeout(resolve, threadSpawnSpeed));
         }
         while (livingThreads > 0) {
@@ -243,7 +209,9 @@ async function startJob(job: Job) {
     });
 }
 
-for (let job of jobs) {
-    console.log(`Starting job: ${job.name || `x${job.xStart}-${job.xEnd}_y${job.yStart}-${job.yEnd}`}`);
-    await startJob(job);
+if (isMainThread) {
+    for (let job of jobs) {
+        console.log(`Starting job: ${job.name || `x${job.xStart}-${job.xEnd}_y${job.yStart}-${job.yEnd}`}`);
+        await startJob(job);
+    }
 }
