@@ -103,7 +103,7 @@ async function startJob(job: Job) {
     let yEnd = job.yEnd;
     let name = job.name || `x${xStart}-${xEnd}_y${yStart}-${yEnd}`;
 
-    let filePath = `images/${name}/${DateFormatter.format(curTime).replace(/-/g, "/")}/${TimeFormatter.format(curTime).replace(/:/g, "-")}Z`;
+    let filePath = `images/${name}/${DateFormatter.format(curTime).replace(/-/g, "/")}/${TimeFormatter.format(curTime).replace(/^24/,"00").replace(/:/g, "-")}Z`;
     fs.mkdirSync(filePath, { recursive: true });
 
     let abort = false;
