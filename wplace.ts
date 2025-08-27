@@ -107,6 +107,7 @@ async function startJob(job: Job) {
     let abort = false;
     let livingThreads = 0;
 
+    let threadSpawnSpeed = 500; // ms between spawning threads
     let threadLimit = 3; // this sets the default thread limit per proxy
     let requestSpeed = 1000; // ms. Probably don't set this too low or you will get rate limited, experimentally i have found that threadlimit 3 with 1000ms is the lowest you can go
 
@@ -192,10 +193,10 @@ async function startJob(job: Job) {
                 }
                 console.log(`Finished column ${x} (${livingThreads} threads alive)`);
             });
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, threadSpawnSpeed));
         }
         while (livingThreads > 0) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, threadSpawnSpeed));
         }
         console.log("All done!");
 
